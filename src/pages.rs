@@ -1,22 +1,19 @@
 use anyhow::{Context, Ok, Result};
 use reqwest::Client;
+use sqlx::SqlitePool;
 use std::{path::Path, sync::Arc};
 use tokio::fs;
 use tracing::{error, info};
 
 use crate::{
     AppState,
-    downloader::{DownloadItem, DownloadItemExpired, cache_path_by_url},
+    downloader::{DownloadItem, DownloadItemExpired, cache_path},
     rules::TablePageRule,
 };
 
 /// Структура для строки таблицы pages
 #[derive(Debug, sqlx::FromRow)]
 pub(crate) struct TablePage {
-    /// Уникальный идентификатор страницы
-    id: i64,
-    /// Идентификатор сайта, к которому принадлежит страница
-    site_id: i64,
     /// URL страницы, которую нужно скачать
     pub(crate) url: String,
     /// Локальный путь. Где будет храниться скачанная страница
@@ -34,7 +31,7 @@ impl TablePage {
         app_state: Arc<AppState>,
     ) -> Result<Vec<Self>> {
         info!("Получение всех страниц");
-        sqlx::query_as::<_, Self>("SELECT * FROM pages WHERE site_id = ?")
+        sqlx::query_as::<_, Self>("SELECT url, path, rules FROM pages WHERE site_id = ?")
             .bind(site_id)
             .fetch_all(&app_state.db_pool)
             .await
@@ -53,7 +50,7 @@ impl TablePage {
             return;
         }
 
-        self.path = cache_path_by_url(pages_dir, &self.url)
+        self.path = cache_path(pages_dir, &self.url)
             .to_string_lossy()
             .to_string();
     }
@@ -84,7 +81,7 @@ impl TablePage {
     /// Загружает ссылки c страницы, используя правила группы
     pub(crate) async fn load_links(
         self,
-        app_state: Arc<AppState>,
+        db: SqlitePool,
         _client: &Client, // Будет нужен для рекурсивного скачивания
     ) -> Result<Vec<String>> {
         info!(?self.url, "Обработка страницы");
@@ -102,7 +99,7 @@ impl TablePage {
         let mut next_rule_group_id = rule_group_ids_iter.next();
 
         while let Some(rule_group_id) = next_rule_group_id {
-            let rules = TablePageRule::get_by_group(rule_group_id, app_state.clone()).await?;
+            let rules = TablePageRule::get_by_group(rule_group_id, db.clone()).await?;
 
             contents = contents
                 .into_iter()

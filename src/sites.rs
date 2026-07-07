@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 use crate::{
     download::TableDownload,
-    downloader::{create_client, download_pages},
+    downloader::{create_client, download_list, download_pages},
     pages::TablePage,
     state::AppState,
 };
@@ -44,7 +44,7 @@ impl TableSites {
         let mut links: Vec<String> = Vec::new();
         // Так как могут быть вложенные страницы, обрабатываем их синхронно
         for page in downloaded_pages {
-            match page.load_links(app_state.clone(), &client).await {
+            match page.load_links(app_state.db_pool.clone(), &client).await {
                 Ok(mut l) => links.append(&mut l),
                 Err(err) => error!(?err, "Ошибка при загрузке ссылок"),
             };
@@ -67,7 +67,42 @@ impl TableSites {
             .collect::<Vec<_>>();
 
         // Добавить их в базу данных
-        TableDownload::append(app_state.clone(), self.id, &links).await?;
+        TableDownload::append(app_state.db_pool.clone(), self.id, &links).await?;
+        loop {
+            let links_for_download =
+                TableDownload::get_not_completed(app_state.clone(), self.id, 5).await?;
+            let count = links_for_download.len();
+            info!("Получено ссылок для скачивания: {count}",);
+            if count == 0 {
+                break;
+            }
+
+            let result_download = download_list(&client, &links_for_download).await;
+            info!("Успешно скачано: {}", result_download.len());
+
+            let result = links_for_download.into_iter().filter_map(|link| {
+                let info = result_download.get(&link.download_url)?;
+                Some((link, info))
+            });
+
+            let handles = result.into_iter().map(|(mut link, info)| {
+                let db = app_state.db_pool.clone();
+                async move {
+                    info!("Файл скачан: {} -> {}", link.download_url, link.local_path);
+                    info!("Информация о файле: {:?}", info);
+                    link.set_complete(db, info).await.inspect_err(|err| {
+                        error!(
+                            ?link,
+                            ?info,
+                            ?err,
+                            "Ошибка при попытки пометить ссылку как скачанную"
+                        )
+                    })
+                }
+            });
+
+            futures::future::join_all(handles).await;
+        }
 
         Ok(())
     }

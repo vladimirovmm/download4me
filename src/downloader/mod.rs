@@ -7,7 +7,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::downloader::save_as_file::DownloadItemInfo;
+pub(crate) use crate::downloader::save_as_file::DownloadItemInfo;
 use anyhow::{Context, Result};
 use reqwest::{Client, redirect::Policy};
 use save_as_file::download_file;
@@ -53,12 +53,15 @@ pub(crate) trait DownloadItemExpired: DownloadItem {
             .unwrap_or(true)
     }
 }
-/// Для формирования временного имени файла по URL
-pub(crate) fn cache_path_by_url(root_dir: &Path, url: &str) -> PathBuf {
+
+pub(crate) fn hex_hash<H: Hash>(value: H) -> String {
     let mut hasher = DefaultHasher::new();
-    url.hash(&mut hasher);
-    let hash = hasher.finish();
-    root_dir.join(format!("{hash:x}.cache"))
+    value.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+/// Для формирования временного имени файла по URL
+pub(crate) fn cache_path<H: Hash>(root_dir: &Path, value: H) -> PathBuf {
+    root_dir.join(hex_hash(value)).with_extension("cache")
 }
 /// Создает клиент для HTTPS-запросов с учетом переменной окружения `PROXY`.
 pub(crate) fn create_client() -> Result<Client> {

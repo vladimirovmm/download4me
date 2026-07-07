@@ -7,13 +7,53 @@ use std::fmt::Debug;
 use tokio::{fs, io::AsyncWriteExt};
 use tracing::info;
 
-use crate::downloader::DownloadItem;
+use crate::downloader::{DownloadItem, hex_hash};
 
 /// Информация о загруженном файле. Используется для формирования нового имени после загрузки.
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub(crate) struct DownloadItemInfo {
     description: Option<String>,
     r#type: Option<String>,
+}
+
+impl DownloadItemInfo {
+    pub(crate) fn file_name(&self) -> Option<String> {
+        self.description
+            .as_deref()
+            .and_then(|desc| {
+                desc.split(";")
+                    .map(|value| value.trim())
+                    .find(|value| value.contains("filename="))
+                    .map(|value| value["filename=".len()..].to_string())
+                    .map(|v| {
+                        v.chars()
+                            .map(|ch| match ch {
+                                ch if ch.is_alphanumeric()
+                                    || ch == '_'
+                                    || ch == '.'
+                                    || ch == '-' =>
+                                {
+                                    ch
+                                }
+                                _ => '_',
+                            })
+                            .take(64)
+                            .collect()
+                    })
+            })
+            .or_else(|| {
+                self.get_extension()
+                    .map(|ext| format!("{}.{ext}", hex_hash(self)))
+            })
+    }
+
+    fn get_extension(&self) -> Option<&str> {
+        let ext = self.r#type.as_deref()?;
+        match ext {
+            ext if ext.contains("torrent") => Some("torrent"),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 /// Загружает файл по указанному URL и сохраняет его на диск.
@@ -63,6 +103,7 @@ where
         .write(true)
         .read(false)
         .create(true)
+        .truncate(true)
         .open(path)
         .await
         .with_context(|| format!("Не удалось создать файл: {:?}", path))?;

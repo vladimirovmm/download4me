@@ -1,28 +1,22 @@
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::sync::Arc;
+use sqlx::SqlitePool;
 use tracing::info;
-
-use crate::state::AppState;
 
 #[derive(Debug, sqlx::FromRow)]
 pub(crate) struct TablePageRule {
-    id: i64,
-    group_id: i32,
-    priority: i32,
     filter: String,
     new_value: Option<String>,
     action: String,
-    description: Option<String>,
 }
 
 impl TablePageRule {
-    pub(crate) async fn get_by_group(group_id: i64, app_state: Arc<AppState>) -> Result<Vec<Self>> {
+    pub(crate) async fn get_by_group(group_id: i64, db: SqlitePool) -> Result<Vec<Self>> {
         let rules = sqlx::query_as::<_, Self>(
-            "SELECT * FROM rules WHERE group_id = $1 ORDER BY priority ASC",
+            "SELECT filter, new_value, action FROM rules WHERE group_id = $1 ORDER BY priority ASC",
         )
         .bind(group_id)
-        .fetch_all(&app_state.db_pool)
+        .fetch_all(&db)
         .await
         .context("Ошибка при получении правил для группы")?;
         Ok(rules)

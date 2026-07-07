@@ -62,7 +62,6 @@ CREATE TABLE IF NOT EXISTS rules (
 CREATE INDEX IF NOT EXISTS idx_rules_group_id ON rules (group_id, priority);
 
 --- downloads ---------------------------------------------------------
-
 -- Очередь скачиваний: хранит ссылки, которые нужно обработать, и статус их скачивания
 CREATE TABLE IF NOT EXISTS downloads (
     -- URL для скачивания (уникальный ключ — не будет дублей в очереди)
@@ -72,11 +71,21 @@ CREATE TABLE IF NOT EXISTS downloads (
     -- Локальный путь, куда сохранён файл (заполняется после скачивания)
     local_path TEXT,
     -- Статус скачивания: 0 — в очереди/не обработан, 1 — успешно скачан
-    success INTEGER NOT NULL DEFAULT 0
+    completed INTEGER NOT NULL DEFAULT 0,
+    -- Количество предпринятых попыток скачивания (начиная с первой попытки или ошибок)
+    attempts INTEGER NOT NULL DEFAULT 0,
+    -- UNIX TIME: время последней попытки/взятия задачи.
+    -- NULL = задача никогда не бралась.
+    -- Используется для оптимистичной блокировки: если last_attempt_at < порога — задача считается свободной.
+    last_attempt_at INTEGER,
+    -- Внешний ключ на таблицу sites(id)
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
 
 -- Составной индекс для основного рабочего запроса: «взять необработанные ссылки для конкретного сайта»
--- Именно он будет использоваться всегда; отдельные индексы по site_id и success не нужны
-CREATE INDEX IF NOT EXISTS idx_downloads_site_success ON downloads (site_id, success);
+-- Порядок колонок: site_id (равенство), completed (равенство), attempts (малый диапазон), last_attempt_at (диапазон)
+CREATE INDEX IF NOT EXISTS idx_downloads_site_completed_attempts_last
+    ON downloads (site_id, completed, attempts, last_attempt_at);
+
 
 ------------------------------------------------------------
