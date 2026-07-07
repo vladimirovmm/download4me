@@ -1,0 +1,5 @@
+/target
+.zed/
+resources/
+migrations/20260702071048_data.up.sql
+migrations/20260702071048_data.down.sql
