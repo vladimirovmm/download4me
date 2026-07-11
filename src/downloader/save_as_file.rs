@@ -24,11 +24,12 @@ impl DownloadItemInfo {
             .as_deref()
             .and_then(|desc| {
                 desc.split(";")
-                    .map(|value| value.trim())
-                    .find(|value| value.contains("filename="))
-                    .map(|value| value["filename=".len()..].to_string())
-                    .map(|v| {
-                        v.chars()
+                    .map(|desc_part| desc_part.trim())
+                    .find(|desc_part| desc_part.contains("filename="))
+                    .map(|file_name| file_name["filename=".len()..].to_string())
+                    .map(|file_name| {
+                        file_name
+                            .chars()
                             .map(|ch| match ch {
                                 ch if ch.is_alphanumeric()
                                     || ch == '_'
@@ -39,8 +40,12 @@ impl DownloadItemInfo {
                                 }
                                 _ => '_',
                             })
-                            .take(64)
-                            .collect()
+                            .collect::<String>()
+                    })
+                    .map(|file_name| {
+                        file_name
+                            .trim_matches(|ch: char| !ch.is_ascii_alphanumeric())
+                            .to_string()
                     })
             })
             .or_else(|| {
