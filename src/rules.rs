@@ -27,6 +27,7 @@ impl TablePageRule {
 
         let rg = Regex::new(self.filter.as_str())
             .context("Невозможно скомпилировать регулярное выражение")?;
+
         match self.action.as_str() {
             "include" => {
                 // Оставляем только совпадения, каждое с новой строки

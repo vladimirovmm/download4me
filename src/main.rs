@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use std::sync::Arc;
 use tracing::info;
-use tracing_subscriber::{fmt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, fmt, util::SubscriberInitExt};
 
 use crate::{sites::TableSites, state::AppState};
 

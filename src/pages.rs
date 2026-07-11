@@ -1,13 +1,15 @@
-use anyhow::{Context, Ok, Result};
-use reqwest::Client;
-use sqlx::SqlitePool;
+use anyhow::{Context, Result};
+use reqwest::{Client, Url};
 use std::{path::Path, sync::Arc};
 use tokio::fs;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{
     AppState,
-    downloader::{DownloadItem, DownloadItemExpired, cache_path},
+    downloader::{
+        DownloadItem, DownloadItemExpired, cache_path, download_pages,
+        simple_item::SimpleDownloaderLink,
+    },
     rules::TablePageRule,
 };
 
@@ -81,8 +83,9 @@ impl TablePage {
     /// Загружает ссылки c страницы, используя правила группы
     pub(crate) async fn load_links(
         self,
-        db: SqlitePool,
-        _client: &Client, // Будет нужен для рекурсивного скачивания
+        app_state: Arc<AppState>,
+        client: &Client, // Будет нужен для рекурсивного скачивания
+        base_url: Url,
     ) -> Result<Vec<String>> {
         info!(?self.url, "Обработка страницы");
 
@@ -93,20 +96,20 @@ impl TablePage {
         }
 
         let page_content = self.get_cached_content().await;
-        dbg!(&page_content);
         let mut contents = vec![page_content];
         let mut rule_group_ids_iter = rule_ids.into_iter();
         let mut next_rule_group_id = rule_group_ids_iter.next();
 
         while let Some(rule_group_id) = next_rule_group_id {
-            let rules = TablePageRule::get_by_group(rule_group_id, db.clone()).await?;
+            let rules =
+                TablePageRule::get_by_group(rule_group_id, app_state.db_pool.clone()).await?;
 
             contents = contents
                 .into_iter()
                 .map(|content| {
-                    rules
-                        .iter()
-                        .try_fold(content, |old, rule| rule.process(old))
+                    rules.iter().try_fold(content, |old, rule| {
+                        rule.process(old).inspect(|content| debug!("{content}"))
+                    })
                 })
                 .collect::<Result<Vec<String>>>()?
                 .join("\n")
@@ -116,11 +119,42 @@ impl TablePage {
                 .map(ToString::to_string)
                 .collect::<Vec<String>>();
 
+            contents.retain_mut(|link| {
+                let url_result = Url::parse(link).or_else(|_| base_url.join(link));
+                match url_result {
+                    Ok(url) => {
+                        *link = url.to_string();
+                        true
+                    }
+                    Err(err) => {
+                        error!("не валидная ссылка {link}. {err:?}");
+                        false
+                    }
+                }
+            });
+
             next_rule_group_id = rule_group_ids_iter.next();
             if next_rule_group_id.is_some() {
-                todo!("Скачать контент по ссылкам и обработать его следующим правилом");
+                // Есть следующее правило, нужно скачать контент по ссылкам и запустить обработку следующего правила
+
+                // Формируем минимальный набор данных для скачивания
+                let mut pages =
+                    SimpleDownloaderLink::from_list_urls(&contents, &app_state.dirs.pages_dir);
+                // Скачиваем страницы в кэш
+                pages = download_pages(client, pages).await;
+                // Загружаем содержимое страниц из кэша
+                let handlers = pages
+                    .into_iter()
+                    .map(|page| async move { tokio::fs::read_to_string(page.path()).await });
+                let results_content = futures::future::join_all(handlers).await;
+                // Формируем контент для обработки следующим правилом
+                contents = results_content
+                    .into_iter()
+                    .filter_map(|result| result.inspect_err(|err| error!("{err}")).ok())
+                    .collect();
             }
         }
+        debug!("{contents:#?}");
 
         Ok(contents)
     }
