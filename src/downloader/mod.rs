@@ -72,10 +72,29 @@ pub(crate) fn create_client() -> Result<Client> {
         .map(|p| reqwest::Proxy::all(&p).context("Неверный формат прокси"))
         .transpose()?;
 
-    let client_builder = match proxy {
-        Some(proxy) => Client::builder().proxy(proxy),
-        None => Client::builder(),
-    };
+    let default_headers: HeaderMap = [
+        (
+            HeaderName::from_static("sec-ch-ua"),
+            HeaderValue::from_static(r#""Chromium";v="146", "Not-A.Brand";v="24", "YaBrowser";v="26.4", "Yowser";v="2.5""#),
+        ),
+        (
+            HeaderName::from_static("sec-ch-ua-mobile"),
+            HeaderValue::from_static("?0"),
+        ),
+        (
+            HeaderName::from_static("sec-ch-ua-platform"),
+            HeaderValue::from_static("\"Linux\""),
+        ),
+        (
+            HeaderName::from_static("user-agent"),
+            HeaderValue::from_static("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 YaBrowser/26.4.0.0 Safari/537.36"),
+        ),
+    ]
+    .into_iter()
+    .collect();
+
+    let client_builder = client_builder.default_headers(default_headers);
+
     let jar = reqwest::cookie::Jar::default();
     client_builder
         .timeout(TIMEOUT)
