@@ -40,6 +40,9 @@ impl TableDownload {
     pub(crate) async fn append(db_pool: SqlitePool, site_id: i64, links: &[Url]) -> Result<()> {
         let mut affected_rows = 0;
         for url in links {
+            if Self::link_exists(&db_pool, url.clone()).await? {
+                continue;
+            }
             affected_rows += sqlx::query(
                 "INSERT INTO downloads (site_id, download_url) VALUES ($1, $2) ON CONFLICT DO NOTHING",
             )
@@ -53,6 +56,16 @@ impl TableDownload {
         info!(?affected_rows, "Добавлено новых ссылок для скачивания");
 
         Ok(())
+    }
+
+    async fn link_exists(db_pool: &SqlitePool, mut link: Url) -> Result<bool> {
+        link.set_query(None);
+        let pattern = format!("{}%", link.to_string());
+        let result = sqlx::query("SELECT 1 FROM downloads WHERE download_url LIKE $1 LIMIT 1")
+            .bind(&pattern)
+            .fetch_optional(db_pool)
+            .await?;
+        Ok(result.is_some())
     }
 
     /// Бронирует ссылку для скачивания
@@ -147,6 +160,7 @@ impl TableDownload {
 
         Ok(reserved)
     }
+
     /// Устанавливает временный путь для скачивания файла.
     fn set_tmp_path(&mut self, dir: &Path) {
         self.local_path = cache_path(dir, &self.download_url)

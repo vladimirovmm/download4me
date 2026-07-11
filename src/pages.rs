@@ -108,7 +108,8 @@ impl TablePage {
                 .into_iter()
                 .map(|content| {
                     rules.iter().try_fold(content, |old, rule| {
-                        rule.process(old).inspect(|content| debug!("{content}"))
+                        rule.process(old)
+                        // .inspect(|content| debug!("{content}"))
                     })
                 })
                 .collect::<Result<Vec<String>>>()?

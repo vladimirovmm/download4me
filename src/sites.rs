@@ -74,6 +74,7 @@ impl TableSites {
 
         // Добавить их в базу данных
         TableDownload::append(app_state.db_pool.clone(), self.id, &links).await?;
+
         loop {
             let links_for_download =
                 TableDownload::get_not_completed(app_state.clone(), self.id, 5).await?;
