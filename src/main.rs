@@ -19,6 +19,7 @@ async fn main() -> Result<()> {
     fmt::Subscriber::builder()
         .pretty()
         .with_ansi(true)
+        .with_env_filter(EnvFilter::from_default_env())
         .event_format(fmt::format().with_file(true).with_line_number(true))
         .finish()
         .init();
