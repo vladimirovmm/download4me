@@ -3,9 +3,9 @@ use reqwest::{
     Client,
     header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE},
 };
-use std::fmt::Debug;
-use tokio::{fs, io::AsyncWriteExt};
-use tracing::info;
+use std::{fmt::Debug, time::Duration};
+use tokio::{fs, io::AsyncWriteExt, time::timeout};
+use tracing::{debug, info};
 
 use crate::downloader::{DownloadItem, hex_hash};
 

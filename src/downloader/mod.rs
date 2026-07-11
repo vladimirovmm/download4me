@@ -9,9 +9,13 @@ use std::{
 
 pub(crate) use crate::downloader::save_as_file::DownloadItemInfo;
 use anyhow::{Context, Result};
-use reqwest::{Client, redirect::Policy};
+use reqwest::{
+    Client,
+    header::{HeaderMap, HeaderName, HeaderValue},
+    redirect::Policy,
+};
 use save_as_file::download_file;
-use tokio::fs;
+use tokio::{fs, time::sleep};
 use tracing::{error, info, warn};
 
 mod save_as_file;
@@ -137,6 +141,7 @@ pub(crate) async fn download_list<T: DownloadItem>(
                     error!(?url, ?attempts, ?err, "Ошибка при загрузке");
                 }
             };
+            sleep(Duration::from_millis(500)).await;
         }
 
         // Удаляем страницы, которые превысили максимальное количество попыток
