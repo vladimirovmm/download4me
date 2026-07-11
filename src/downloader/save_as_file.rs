@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, ensure};
 use reqwest::{
-    Client,
+    Client, Url,
     header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE},
 };
 use std::{
@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{fs, io::AsyncWriteExt, time::timeout};
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::downloader::{DownloadItem, hex_hash};
 
@@ -120,8 +120,15 @@ where
 
     let mut downloaded_bytes = 0_u64;
     let mut last_log = Instant::now();
+    let mut bytes_interval = 0_u64;
     let last_log_limit = Duration::from_secs(1);
 
+    let display_url = Url::parse(url_str)
+        .map(|mut url| {
+            url.set_query(None);
+            url.to_string()
+        })
+        .unwrap_or(url_str.to_string());
     while let Some(chunk) = timeout(TIMEOUT, response.chunk())
         .await
         .context("timeout")?
@@ -130,7 +137,9 @@ where
         file.write_all(&chunk)
             .await
             .context("Ошибка записи фрагмента на диск")?;
-        downloaded_bytes += chunk.len() as u64;
+        let len = chunk.len() as u64;
+        downloaded_bytes += len;
+        bytes_interval += len;
         if last_log.elapsed() < last_log_limit {
             continue;
         }
@@ -139,8 +148,12 @@ where
         let percent = content_len
             .map(|len| downloaded_bytes as f64 / len as f64 * 100.0)
             .unwrap_or(0.0);
-        let human_readable = size::Size::from_bytes(downloaded_bytes);
-        debug!(?url_str, "Загружено: {:.2}% / {human_readable}", percent);
+        let download_size_human = size::Size::from_bytes(downloaded_bytes);
+        let interval_size_human = size::Size::from_bytes(bytes_interval);
+        println!(
+            "Загружено: {percent:.2}% / {download_size_human}. Скорость {interval_size_human}/с. URL: {display_url}",
+        );
+        bytes_interval = 0;
     }
 
     Ok(download_info)
