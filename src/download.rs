@@ -14,6 +14,8 @@ use crate::{
     state::AppState,
 };
 
+const MAX_ATTEMPTS: i64 = 5;
+
 /// Структура для хранения данных о очереди на скачивания
 #[derive(Debug, sqlx::FromRow)]
 pub(crate) struct TableDownload {
@@ -60,11 +62,18 @@ impl TableDownload {
 
     async fn link_exists(db_pool: &SqlitePool, mut link: Url) -> Result<bool> {
         link.set_query(None);
-        let pattern = format!("{}%", link.to_string());
-        let result = sqlx::query("SELECT 1 FROM downloads WHERE download_url LIKE $1 LIMIT 1")
-            .bind(&pattern)
-            .fetch_optional(db_pool)
-            .await?;
+
+        let pattern = format!("{}%", link);
+        let result = sqlx::query(
+            "SELECT 1
+            	FROM downloads
+            	WHERE download_url LIKE $1 AND attempts < $2
+             	LIMIT 1",
+        )
+        .bind(&pattern)
+        .bind(MAX_ATTEMPTS)
+        .fetch_optional(db_pool)
+        .await?;
         Ok(result.is_some())
     }
 
@@ -127,14 +136,18 @@ impl TableDownload {
             .as_secs() as i64 		// Текущее время в секундах
         	- 60 * 60 * 3;
         let list_links = sqlx::query_as::<_, TableDownload>(
-            "SELECT site_id, download_url, local_path, attempts, last_attempt_at FROM downloads WHERE
-            		site_id = $1
-              		AND completed = 0
-               		AND (last_attempt_at IS NULL OR last_attempt_at < $2)
-                LIMIT $3",
+            "SELECT site_id, download_url, local_path, attempts, last_attempt_at
+            		FROM downloads
+              		WHERE
+	            		site_id = $1
+	              		AND completed = 0
+	               		AND (last_attempt_at IS NULL OR last_attempt_at < $2)
+	                 	AND attempts < $3
+					LIMIT $4",
         )
         .bind(site_id)
         .bind(time_limit)
+        .bind(MAX_ATTEMPTS)
         .bind(limit)
         .fetch_all(&db_pool.db_pool)
         .await?;

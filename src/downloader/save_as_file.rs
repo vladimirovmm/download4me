@@ -118,7 +118,7 @@ where
         .await
         .with_context(|| format!("Не удалось создать файл: {:?}", path))?;
 
-    let mut downloaded = 0_u64;
+    let mut downloaded_bytes = 0_u64;
     let mut last_log = Instant::now();
     let last_log_limit = Duration::from_secs(1);
 
@@ -130,11 +130,17 @@ where
         file.write_all(&chunk)
             .await
             .context("Ошибка записи фрагмента на диск")?;
-        downloaded += chunk.len() as u64;
-        if last_log.elapsed() > last_log_limit {
-            debug!(?downloaded, "Загружено");
-            last_log = Instant::now();
+        downloaded_bytes += chunk.len() as u64;
+        if last_log.elapsed() < last_log_limit {
+            continue;
         }
+        last_log = Instant::now();
+
+        let percent = content_len
+            .map(|len| downloaded_bytes as f64 / len as f64 * 100.0)
+            .unwrap_or(0.0);
+        let human_readable = size::Size::from_bytes(downloaded_bytes);
+        debug!(?url_str, "Загружено: {:.2}% / {human_readable}", percent);
     }
 
     Ok(download_info)

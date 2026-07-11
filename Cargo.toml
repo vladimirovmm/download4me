@@ -16,6 +16,7 @@ chrono = "0.4.42"
 reqwest = {version = "0.13.4", features = ["socks", "cookies", "native-tls"]}
 futures = "0.3.32"
 regex = "1.12.4"
+size = "0.5"
 
 tracing = "0.1.44"
 tracing-subscriber = {version = "0.3.23", features = ["json", "env-filter"]}
