@@ -16,14 +16,16 @@ use crate::{
 #[derive(Debug, sqlx::FromRow)]
 pub(crate) struct TableSites {
     /// Уникальный идентификатор сайта
-    id: i64,
+    pub(crate) id: i64,
     /// Базовый URL сайта-источника (используется для определения принадлежности страниц)
     base_url: String,
+    /// 0 - не используется прокси, если задан
+    proxy: i64,
 }
 
 impl TableSites {
     pub async fn get_all(pool: &SqlitePool) -> Result<Vec<Self>> {
-        sqlx::query_as::<_, Self>("SELECT * FROM sites")
+        sqlx::query_as::<_, Self>("SELECT * FROM sites ORDER BY id")
             .fetch_all(pool)
             .await
             .context("Ошибка загрузки сайтов")
@@ -33,7 +35,7 @@ impl TableSites {
     pub async fn process(self, app_state: Arc<AppState>) -> Result<()> {
         info!("Обработка страниц сайта: {}", self.base_url);
 
-        let client = create_client()?;
+        let client = create_client(self.proxy == 1)?;
 
         let pages = TablePage::get_by_site_id(self.id, app_state.clone()).await?;
         info!("Найдено страниц: {}", pages.len());
@@ -42,9 +44,13 @@ impl TableSites {
         info!("Скачано страниц: {}", downloaded_pages.len());
 
         let mut links: Vec<String> = Vec::new();
+        let base_url = Url::parse(&self.base_url).context("Некорректный base_url")?;
         // Так как могут быть вложенные страницы, обрабатываем их синхронно
         for page in downloaded_pages {
-            match page.load_links(app_state.db_pool.clone(), &client).await {
+            match page
+                .load_links(app_state.clone(), &client, base_url.clone())
+                .await
+            {
                 Ok(mut l) => links.append(&mut l),
                 Err(err) => error!(?err, "Ошибка при загрузке ссылок"),
             };
