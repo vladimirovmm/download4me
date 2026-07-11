@@ -99,6 +99,7 @@ pub(crate) fn create_client() -> Result<Client> {
     client_builder
         .timeout(TIMEOUT)
         .redirect(Policy::limited(5))
+        .http1_only()
         .cookie_provider(Arc::new(jar))
         .build()
         .context("Ошибка при создании клиента")

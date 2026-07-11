@@ -13,7 +13,7 @@ sqlx = {
     features = ["runtime-tokio", "sqlite", "macros", "migrate", "derive", "chrono"]
 }
 chrono = "0.4.42"
-reqwest = {version = "0.13.4", features = ["socks", "cookies"]}
+reqwest = {version = "0.13.4", features = ["socks", "cookies", "native-tls"]}
 futures = "0.3.32"
 regex = "1.12.4"
 
