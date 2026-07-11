@@ -116,6 +116,9 @@ where
         .with_context(|| format!("Не удалось создать файл: {:?}", path))?;
 
     let mut downloaded = 0_u64;
+    let mut last_log = Instant::now();
+    let last_log_limit = Duration::from_secs(1);
+
     while let Some(chunk) = timeout(TIMEOUT, response.chunk())
         .await
         .context("timeout")?
@@ -125,7 +128,10 @@ where
             .await
             .context("Ошибка записи фрагмента на диск")?;
         downloaded += chunk.len() as u64;
-        debug!(?downloaded, "Загружено");
+        if last_log.elapsed() > last_log_limit {
+            debug!(?downloaded, "Загружено");
+            last_log = Instant::now();
+        }
     }
 
     Ok(download_info)
