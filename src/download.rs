@@ -60,7 +60,7 @@ impl TableDownload {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Не удалось получить текущее время")
-            .as_millis() as i64;
+            .as_secs() as i64;
 
         let query = match self.last_attempt_at {
             Some(time) => sqlx::query(
@@ -106,11 +106,13 @@ impl TableDownload {
     ) -> Result<Vec<TableDownload>> {
         info!("Получение не завершённых скачиваний для сайта {site_id}");
 
-        let now = SystemTime::now()
+        // текущее время - 3 часа.
+        // все, кто старше, можно считать так, что резервирование уже не актуально
+        let time_limit = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Не удалось получить текущее время")
-            .as_millis() as i64
-            + 1_800; // 30 минут
+            .as_secs() as i64 		// Текущее время в секундах
+        	- 60 * 60 * 3;
         let list_links = sqlx::query_as::<_, TableDownload>(
             "SELECT site_id, download_url, local_path, attempts, last_attempt_at FROM downloads WHERE
             		site_id = $1
@@ -119,7 +121,7 @@ impl TableDownload {
                 LIMIT $3",
         )
         .bind(site_id)
-        .bind(now)
+        .bind(time_limit)
         .bind(limit)
         .fetch_all(&db_pool.db_pool)
         .await?;

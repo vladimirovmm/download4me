@@ -3,7 +3,10 @@ use reqwest::{
     Client,
     header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE},
 };
-use std::{fmt::Debug, time::Duration};
+use std::{
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 use tokio::{fs, io::AsyncWriteExt, time::timeout};
 use tracing::{debug, info};
 
