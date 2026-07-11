@@ -64,13 +64,23 @@ pub(crate) fn cache_path<H: Hash>(root_dir: &Path, value: H) -> PathBuf {
     root_dir.join(hex_hash(value)).with_extension("cache")
 }
 /// Создает клиент для HTTPS-запросов с учетом переменной окружения `PROXY`.
-pub(crate) fn create_client() -> Result<Client> {
-    let proxy = env::var("PROXY")
-        .inspect_err(|_| info!("Прокси не задан"))
-        .ok()
-        .inspect(|p| info!("Используется прокси: {p}"))
-        .map(|p| reqwest::Proxy::all(&p).context("Неверный формат прокси"))
-        .transpose()?;
+pub(crate) fn create_client(allow_proxy: bool) -> Result<Client> {
+    let mut client_builder = Client::builder();
+    if allow_proxy {
+        info!("Разрешено использование PROXY");
+        let proxy = env::var("PROXY")
+            .inspect_err(|_| info!("Прокси не задан"))
+            .ok()
+            .inspect(|p| info!("Используется прокси: {p}"))
+            .map(|p| reqwest::Proxy::all(&p).context("Неверный формат прокси"))
+            .transpose()?;
+        if let Some(proxy) = proxy {
+            info!("Добавлен прокси");
+            client_builder = client_builder.proxy(proxy);
+        }
+    } else {
+        info!("Использование PROXY запрещено");
+    }
 
     let default_headers: HeaderMap = [
         (
