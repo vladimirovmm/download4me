@@ -111,7 +111,6 @@ pub(crate) fn create_client(allow_proxy: bool) -> Result<Client> {
 
     let jar = reqwest::cookie::Jar::default();
     client_builder
-        .timeout(TIMEOUT)
         .redirect(Policy::limited(5))
         .http1_only()
         .cookie_provider(Arc::new(jar))

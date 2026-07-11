@@ -9,6 +9,8 @@ use tracing::{debug, info};
 
 use crate::downloader::{DownloadItem, hex_hash};
 
+const TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Информация о загруженном файле. Используется для формирования нового имени после загрузки.
 #[derive(Debug, Hash)]
 pub(crate) struct DownloadItemInfo {
@@ -109,13 +111,16 @@ where
         .with_context(|| format!("Не удалось создать файл: {:?}", path))?;
 
     let mut downloaded = 0_u64;
-    while let Some(chunk) = response.chunk().await.context("Ошибка чтения фрагмента")?
+    while let Some(chunk) = timeout(TIMEOUT, response.chunk())
+        .await
+        .context("timeout")?
+        .context("Ошибка чтения фрагмента")?
     {
         file.write_all(&chunk)
             .await
             .context("Ошибка записи фрагмента на диск")?;
         downloaded += chunk.len() as u64;
-        info!(?downloaded, "Загружено");
+        debug!(?downloaded, "Загружено");
     }
 
     Ok(download_info)
@@ -149,7 +154,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_download_file() -> Result<()> {
-        let client = create_client()?;
+        let client = create_client(true)?;
         let tmp_dir = tempfile::tempdir()?;
 
         let tmp_path = tmp_dir.path().join("example.html");
