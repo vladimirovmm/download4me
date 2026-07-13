@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::{Client, Url};
 use std::{path::Path, sync::Arc};
 use tokio::fs;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::{
     AppState,
@@ -155,7 +155,6 @@ impl TablePage {
                     .collect();
             }
         }
-        debug!("{contents:#?}");
 
         Ok(contents)
     }

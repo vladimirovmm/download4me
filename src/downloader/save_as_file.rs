@@ -61,6 +61,7 @@ impl DownloadItemInfo {
         let ext = self.r#type.as_deref()?;
         match ext {
             ext if ext.contains("torrent") => Some("torrent"),
+            ext if ext.contains("mp4") => Some("mp4"),
             _ => unimplemented!(),
         }
     }
