@@ -25,7 +25,7 @@ pub(crate) struct TableSites {
 
 impl TableSites {
     pub async fn get_all(pool: &SqlitePool) -> Result<Vec<Self>> {
-        sqlx::query_as::<_, Self>("SELECT * FROM sites ORDER BY id")
+        sqlx::query_as::<_, Self>("SELECT * FROM sites WHERE enable = 1 ORDER BY id")
             .fetch_all(pool)
             .await
             .context("Ошибка загрузки сайтов")

@@ -143,6 +143,7 @@ impl TableDownload {
 	              		AND completed = 0
 	               		AND (last_attempt_at IS NULL OR last_attempt_at < $2)
 	                 	AND attempts < $3
+	                 	AND enable = 1
 					LIMIT $4",
         )
         .bind(site_id)

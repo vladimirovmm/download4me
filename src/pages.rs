@@ -33,18 +33,20 @@ impl TablePage {
         app_state: Arc<AppState>,
     ) -> Result<Vec<Self>> {
         info!("Получение всех страниц");
-        sqlx::query_as::<_, Self>("SELECT url, path, rules FROM pages WHERE site_id = ?")
-            .bind(site_id)
-            .fetch_all(&app_state.db_pool)
-            .await
-            .context("Ошибка при получении всех страниц")
-            .map(|mut pages| {
-                let pages_dir = &app_state.dirs.pages_dir;
-                pages
-                    .iter_mut()
-                    .for_each(|page| page.init_path_if_empty(pages_dir));
-                pages
-            })
+        sqlx::query_as::<_, Self>(
+            "SELECT url, path, rules FROM pages WHERE site_id = ? AND enable = 1",
+        )
+        .bind(site_id)
+        .fetch_all(&app_state.db_pool)
+        .await
+        .context("Ошибка при получении всех страниц")
+        .map(|mut pages| {
+            let pages_dir = &app_state.dirs.pages_dir;
+            pages
+                .iter_mut()
+                .for_each(|page| page.init_path_if_empty(pages_dir));
+            pages
+        })
     }
 
     fn init_path_if_empty(&mut self, pages_dir: &Path) {
@@ -108,8 +110,11 @@ impl TablePage {
                 .into_iter()
                 .map(|content| {
                     rules.iter().try_fold(content, |old, rule| {
-                        rule.process(old)
-                        // .inspect(|content| debug!("{content}"))
+                        if old.is_empty() {
+                            return Ok(old);
+                        }
+                        rule.process(&old).map(|content| content.trim().to_string())
+                        // .inspect(|content| tracing::debug!("{content}. rule: {rule:?}"))
                     })
                 })
                 .collect::<Result<Vec<String>>>()?
@@ -128,7 +133,7 @@ impl TablePage {
                         true
                     }
                     Err(err) => {
-                        error!("не валидная ссылка {link}. {err:?}");
+                        error!("не валидная ссылка `{link}`. {err:?}");
                         false
                     }
                 }

@@ -13,7 +13,7 @@ pub(crate) struct TablePageRule {
 impl TablePageRule {
     pub(crate) async fn get_by_group(group_id: i64, db: SqlitePool) -> Result<Vec<Self>> {
         let rules = sqlx::query_as::<_, Self>(
-            "SELECT filter, new_value, action FROM rules WHERE group_id = $1 ORDER BY priority ASC",
+            "SELECT filter, new_value, action FROM rules WHERE group_id = $1 AND enable = 1 ORDER BY priority ASC",
         )
         .bind(group_id)
         .fetch_all(&db)
@@ -22,7 +22,7 @@ impl TablePageRule {
         Ok(rules)
     }
 
-    pub(crate) fn process(&self, content: String) -> Result<String> {
+    pub(crate) fn process(&self, content: &str) -> Result<String> {
         info!(?self.filter, "Обработка по фильтром контента");
 
         let rg = Regex::new(self.filter.as_str())
@@ -32,7 +32,7 @@ impl TablePageRule {
             "include" => {
                 // Оставляем только совпадения, каждое с новой строки
                 let matches: Vec<&str> = rg
-                    .find_iter(&content)
+                    .find_iter(content)
                     .map(|m| m.as_str())
                     .filter(|s| !s.is_empty())
                     .collect();
