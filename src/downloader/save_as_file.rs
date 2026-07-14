@@ -84,7 +84,11 @@ where
         .context("Ошибка загрузки")?;
     let status = response.status();
     info!(?status, "HTTP статус ответа");
-    ensure!(status.is_success(), "HTTP ошибка при загрузке: {}", status);
+    ensure!(
+        status.is_success(),
+        "{}. HTTP ошибка при загрузке",
+        status.as_u16()
+    );
 
     // Получаем заголовки ответа
     let headers = response.headers();

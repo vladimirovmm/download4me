@@ -22,7 +22,7 @@ mod save_as_file;
 pub(crate) mod simple_item;
 
 const CACHE_DURATION: Duration = Duration::from_hours(24);
-const MAX_ATTEMPTS: usize = 5;
+const MAX_ATTEMPTS: usize = 2;
 
 /// Данные о задаче загрузки файла.
 pub(crate) trait DownloadItem: Sized {
@@ -137,7 +137,12 @@ pub(crate) async fn download_list<T: DownloadItem>(
                     *result = Some(info);
                 }
                 Err(err) => {
-                    error!(?url, ?attempts, ?err, "Ошибка при загрузке");
+                    let err_str = err.to_string();
+                    error!(?url, ?attempts, ?err_str, "Ошибка при загрузке");
+                    // Если ошибка 403, увеличиваем количество попыток до максимума, чтобы не повторять загрузку
+                    if err_str.starts_with("403") {
+                        *attempts = MAX_ATTEMPTS;
+                    }
                 }
             };
             sleep(Duration::from_millis(500)).await;
